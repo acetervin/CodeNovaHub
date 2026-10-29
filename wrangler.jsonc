@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "project-hub",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-05",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  }
+  // Data, logins and files live in Supabase. NEXT_PUBLIC_* values are baked in at build time,
+  // so set them as build variables in Workers Builds too. SUPABASE_SECRET_KEY is a runtime secret:
+  // npx wrangler secret put SUPABASE_SECRET_KEY
+}
