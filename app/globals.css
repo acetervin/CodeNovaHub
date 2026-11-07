@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/* Hub look: soft grey canvas, white rounded cards, one orange accent, black pill controls.
+   Swap --color-nova (and its -ink / -soft) for #ffc21a to use CodeNova's gold instead. */
+@theme {
+  --color-bg: #ececec;
+  --color-card: #ffffff;
+  --color-paper: #f4f4f4;
+  --color-ink: #151515;
+  --color-muted: #6a6a6a;
+  --color-faint: #999999;
+  --color-line: #e6e6e6;
+
+  --color-nova: #f26b1f;
+  --color-nova-ink: #b84a0c;
+  --color-nova-soft: #fff0e6;
+  --color-ok: #1b9a45;
+  --color-ok-soft: #e4f5e9;
+  --color-danger: #d9342b;
+  --color-danger-soft: #fde9e7;
+
+  /* Project cards take their colour from the stage they're in. */
+  --color-lilac: #e6e2fb;
+  --color-lilac-ink: #6b55e8;
+  --color-peach: #fde3d0;
+  --color-rose: #fbd9e5;
+  --color-rose-ink: #d93f7a;
+  --color-mint: #d3f0dd;
+
+  --font-sans: var(--font-outfit), system-ui, sans-serif;
+  --radius-card: 28px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  background: var(--color-bg);
+}
+
+body {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+input, textarea, select { font-size: 16px; }
+button, a, summary, label[for] { touch-action: manipulation; }
+button, summary, nav a { user-select: none; -webkit-user-select: none; }
+summary::-webkit-details-marker { display: none; }
+:focus-visible { outline: 2px solid var(--color-nova); outline-offset: 2px; }
+
+/* Press feedback: the control answers the moment it's pressed. */
+.btn { transition: transform 160ms var(--ease-out), background-color 150ms ease, color 150ms ease; }
+.btn:active:not(:disabled) { transform: scale(0.97); }
+
+/* Chart bars: the peach-to-white fade from the reference. They grow once when the page opens. */
+.bar {
+  background: linear-gradient(180deg, #f6a179 0%, #fbcdb3 55%, #fff3ec 100%);
+  transform-origin: bottom;
+  animation: grow 700ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+.bar[data-tone="muted"] { background: linear-gradient(180deg, #d4d4d4 0%, #e6e6e6 60%, #f3f3f3 100%); }
+.bar[data-tone="late"] { background: linear-gradient(180deg, #f08a84 0%, #f8c7c3 60%, #fdeeed 100%); }
+@keyframes grow { from { transform: scaleY(0); } }
+
+/* Sheets: forms and menus open in a native popover. Bottom sheet on phones, centred card on desktop. */
+.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  max-height: 88dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  background: var(--color-card);
+  color: var(--color-ink);
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateY(100%);
+  transition: transform 380ms var(--ease-drawer), display 380ms allow-discrete, overlay 380ms allow-discrete;
+}
+.sheet:popover-open { transform: none; }
+@starting-style { .sheet:popover-open { transform: translateY(100%); } }
+.sheet::backdrop {
+  background: rgb(0 0 0 / 0);
+  transition: background-color 300ms ease, display 300ms allow-discrete, overlay 300ms allow-discrete;
+}
+.sheet:popover-open::backdrop { background: rgb(0 0 0 / 0.28); }
+@starting-style { .sheet:popover-open::backdrop { background: rgb(0 0 0 / 0); } }
+
+@media (min-width: 640px) {
+  .sheet {
+    inset: 0;
+    margin: auto;
+    width: min(480px, calc(100% - 32px));
+    height: fit-content;
+    border-radius: var(--radius-card);
+    padding: 24px;
+    opacity: 0;
+    transform: scale(0.96);
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), display 200ms allow-discrete, overlay 200ms allow-discrete;
+  }
+  .sheet:popover-open { opacity: 1; transform: none; }
+  @starting-style { .sheet:popover-open { opacity: 0; transform: scale(0.96); } }
+}
+
+/* The "more" menu grows out of the nav button that opens it. */
+.menu {
+  position: fixed;
+  inset: auto auto calc(100px + env(safe-area-inset-bottom, 0px)) 50%;
+  translate: -50% 0;
+  margin: 0;
+  min-width: 220px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--color-card);
+  padding: 8px;
+  box-shadow: 0 18px 50px -12px rgb(0 0 0 / 0.25);
+  transform-origin: bottom center;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out), display 160ms allow-discrete, overlay 160ms allow-discrete;
+}
+.menu:popover-open { opacity: 1; transform: none; }
+@starting-style { .menu:popover-open { opacity: 0; transform: scale(0.95); } }
+@media (min-width: 1024px) {
+  .menu { inset: auto auto 84px 16px; translate: none; transform-origin: bottom left; }
+}
+
+/* Floating tab bar: frosted pill, content scrolls under it. */
+.tabbar {
+  background: rgb(232 232 232 / 0.78);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .tabbar { background: #e4e4e4; backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .sheet, .menu { transition-property: opacity, display, overlay; }
+  .btn:active:not(:disabled) { transform: none; }
+  .sheet, .sheet:popover-open, .menu, .menu:popover-open { transform: none; }
+  .bar { animation: none; }
+}
