@@ -85,7 +85,7 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
             <ul className="flex flex-col gap-3">
               {invoices.map((d) => card(d.id, "bg-paper text-ink", "wallet", <>
                 {open(d.path, d.title)}
-                <p className="text-sm text-faint">{[d.ref, `Added ${shortDate(d.created_at)}`].filter(Boolean).join(", ")}</p>
+                <p className="text-sm text-faint">{[d.ref !== d.title && d.ref, `Added ${shortDate(d.created_at)}`].filter(Boolean).join(", ")}</p>
               </>, act.deleteDocument.bind(null, id, d.id)))}
             </ul>
           )}

@@ -54,6 +54,22 @@ export function ActivityTile({ kind }: { kind: string }) {
   );
 }
 
+/** One history entry: kind tile, who, when, what. `when` is the time as shown (e.g. "5 min ago" or "14:02"). */
+export function LogRow({ a, when }: { a: { kind: string; actor: string; at: string; summary: string }; when: string }) {
+  return (
+    <li className="flex items-start gap-3 rounded-2xl p-3">
+      <ActivityTile kind={a.kind} />
+      <div className="min-w-0 flex-1">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="font-medium">{a.actor}</span>
+          <time dateTime={a.at} className="shrink-0 text-xs tabular-nums text-faint">{when}</time>
+        </p>
+        <p className="text-sm text-muted">{a.summary}</p>
+      </div>
+    </li>
+  );
+}
+
 /** The reference's histogram: adjacent bars fading from peach to white. Values are 0–100. */
 export function Bars({ values, tones: barTones, label, className = "h-28" }: {
   values: number[];

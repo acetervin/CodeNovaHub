@@ -1,5 +1,5 @@
 import { getProject, session } from "@/lib/supabase";
-import { ActivityTile, Card, Empty, TopBar } from "@/components/ui";
+import { Card, Empty, LogRow, TopBar } from "@/components/ui";
 import { Icon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -31,18 +31,7 @@ export default async function History({ params }: PageProps<"/p/[id]/history">) 
           <h2 className="px-1 text-sm text-faint">{d}</h2>
           <Card className="p-2">
             <ul>
-              {rows.map((a) => (
-                <li key={a.id} className="flex items-start gap-3 rounded-2xl p-3">
-                  <ActivityTile kind={a.kind} />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-baseline justify-between gap-3">
-                      <span className="font-medium">{a.actor}</span>
-                      <time dateTime={a.at} className="shrink-0 text-xs tabular-nums text-faint">{time(a.at)}</time>
-                    </p>
-                    <p className="text-sm text-muted">{a.summary}</p>
-                  </div>
-                </li>
-              ))}
+              {rows.map((a) => <LogRow key={a.id} a={a} when={time(a.at)} />)}
             </ul>
           </Card>
         </section>

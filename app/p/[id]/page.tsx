@@ -3,7 +3,7 @@ import { getProject, rows, session } from "@/lib/supabase";
 import { nairobiToday } from "@/lib/form";
 import { STAGES, shillings, shortDate, stageLabel } from "@/lib/stages";
 import { completion, money, taskState, weeklyCompletion } from "@/lib/progress";
-import { ActivityTile, Avatar, Bars, Card, Empty, Pill, RoundLink, SectionHead, ago } from "@/components/ui";
+import { Avatar, Bars, Card, Empty, LogRow, Pill, RoundLink, SectionHead, ago } from "@/components/ui";
 import { Icon, Mark } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -164,18 +164,7 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
             <SectionHead title="Latest updates" href={`${base}/history`} />
             <Card className="p-2">
               <ul>
-                {log.map((a) => (
-                  <li key={a.id} className="flex items-start gap-3 rounded-2xl p-3">
-                    <ActivityTile kind={a.kind} />
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-baseline justify-between gap-3">
-                        <span className="font-medium">{a.actor}</span>
-                        <time dateTime={a.at} className="shrink-0 text-xs text-faint">{ago(a.at)}</time>
-                      </p>
-                      <p className="text-sm text-muted">{a.summary}</p>
-                    </div>
-                  </li>
-                ))}
+                {log.map((a) => <LogRow key={a.id} a={a} when={ago(a.at)} />)}
               </ul>
             </Card>
           </section>

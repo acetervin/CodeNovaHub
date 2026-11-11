@@ -1,10 +1,10 @@
-import { getProject, session } from "@/lib/supabase";
+import { getProject, rows, session } from "@/lib/supabase";
 import { nairobiToday } from "@/lib/form";
 import { PLANS, shillings, shortDate } from "@/lib/stages";
 import { money } from "@/lib/progress";
 import { Field, Input } from "@/components/fields";
 import { Submit } from "@/components/Submit";
-import { Bars, Card, Empty, Pill, Sheet, SheetButton, TopBar } from "@/components/ui";
+import { ActivityTile, Bars, Card, Empty, LogRow, Pill, SectionHead, Sheet, SheetButton, TopBar, ago } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import * as act from "../actions";
 
@@ -14,8 +14,13 @@ const planLabel: Record<string, string> = Object.fromEntries(PLANS);
 export default async function Payments({ params }: PageProps<"/p/[id]/payments">) {
   const { id } = await params;
   const [{ db, isAdmin }, p] = await Promise.all([session(), getProject(id)]);
-  const { data: pays, error } = await db.from("payments").select("*").eq("project_id", id).order("due_on", { nullsFirst: false });
-  if (error) throw error;
+  const [paysQ, invoicesQ, logQ] = await Promise.all([
+    db.from("payments").select("*").eq("project_id", id).order("due_on", { nullsFirst: false }),
+    db.from("documents").select("id, title, ref, path, created_at").eq("project_id", id).eq("kind", "invoice").order("created_at", { ascending: false }),
+    db.from("activity").select("id, at, actor, summary, kind").eq("project_id", id).eq("kind", "payment")
+      .order("at", { ascending: false }).order("id", { ascending: false }).limit(6),
+  ]);
+  const pays = rows(paysQ), invoices = rows(invoicesQ), log = rows(logQ);
 
   const today = nairobiToday();
   const m = money(pays, today);
@@ -31,8 +36,11 @@ export default async function Payments({ params }: PageProps<"/p/[id]/payments">
         {isAdmin && <SheetButton target="add-payment" label="New payment" />}
       </TopBar>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
-        <Card>
+      {/* Desktop: left is where the money stands and its record, right is what's due and the paperwork.
+          Phones: one column, ordered summary, payments, invoices, history. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
+        <div className="contents lg:flex lg:flex-col lg:gap-5">
+        <Card className="order-1">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="font-medium">Paid so far</h2>
@@ -65,7 +73,16 @@ export default async function Payments({ params }: PageProps<"/p/[id]/payments">
           )}
         </Card>
 
-        <ul className="flex flex-col gap-3">
+        <section className="order-4 flex flex-col gap-3">
+          <SectionHead title="Payment history" href={`/p/${id}/history`} />
+          {log.length === 0 ? <Empty icon="history">Every payment added, received or changed is recorded here, with who did it.</Empty> : (
+            <Card className="p-2"><ul>{log.map((a) => <LogRow key={a.id} a={a} when={ago(a.at)} />)}</ul></Card>
+          )}
+        </section>
+        </div>
+
+        <div className="contents lg:flex lg:flex-col lg:gap-5">
+        <ul className="order-2 flex flex-col gap-3">
           {pays.length === 0 && <Empty icon="wallet">{isAdmin ? "No payments yet. Add the deposit with New payment." : "Your payment schedule will show up here once it's agreed."}</Empty>}
           {pays.map((x) => {
             const s = state(x);
@@ -111,6 +128,29 @@ export default async function Payments({ params }: PageProps<"/p/[id]/payments">
             );
           })}
         </ul>
+
+        <section className="order-3 flex flex-col gap-3">
+          <SectionHead title="Invoices" href={`/p/${id}/files`} more={isAdmin ? "Add on Files" : "All files"} />
+          {invoices.length === 0 ? <Empty icon="receipt">{isAdmin ? "No invoices yet. Add them on the Files page and they show up here too." : "Invoices for this project will show up here."}</Empty> : (
+            <Card className="p-2">
+              <ul>
+                {invoices.map((d) => (
+                  <li key={d.id}>
+                    <a href={`/f/${d.path}`} target="_blank" rel="noopener" className="flex items-center gap-3 rounded-2xl p-3 transition-colors duration-150 hover:bg-paper">
+                      <ActivityTile kind="invoice" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{d.title}</p>
+                        <p className="text-sm text-faint">{[d.ref !== d.title && d.ref, `Added ${shortDate(d.created_at)}`].filter(Boolean).join(", ")}</p>
+                      </div>
+                      <span className="text-sm text-muted">Open</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </section>
+        </div>
       </div>
 
       {isAdmin && (
