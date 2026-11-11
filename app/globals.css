@@ -106,6 +106,7 @@ summary::-webkit-details-marker { display: none; }
   }
   .sheet:popover-open { opacity: 1; transform: none; }
   @starting-style { .sheet:popover-open { opacity: 0; transform: scale(0.96); } }
+  .sheet-wide { width: min(1040px, calc(100% - 32px)); }
 }
 
 /* The "more" menu grows out of the nav button that opens it. */

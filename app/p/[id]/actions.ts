@@ -1,27 +1,34 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { adminDb, supabase, supabaseAdmin } from "@/lib/supabase";
+import { adminDb, session, supabase, supabaseAdmin } from "@/lib/supabase";
+import { redirectWithFlash } from "@/lib/flash";
 import { DOC_KIND_IDS, PLAN_IDS, STAGE_IDS } from "@/lib/stages";
 import { FormError, date, email, kes, nairobiToday, oneOf, phone, required, text, url, uuid } from "@/lib/form";
-import { fileProblem } from "@/lib/uploads";
+import { fileProblem, thumbOk } from "@/lib/uploads";
 
 type Db = Awaited<ReturnType<typeof adminDb>>;
 
 type Page = "tasks" | "files" | "payments" | "settings";
 
-/** Runs one change. Success re-renders in place; a problem comes back as ?error= on the page the form is on. */
+/** Runs one change. Success re-renders in place; a problem comes back to the page the form is on (lib/flash.ts). */
 async function run(projectId: unknown, page: Page, db: Db, fn: (db: Db, id: string) => Promise<unknown>) {
   const id = uuid(projectId);
   let problem: string | null = null;
   try {
     await fn(db, id);
   } catch (e) {
-    problem = e instanceof FormError ? e.message : "That didn't save. Try again; if it keeps failing, check Supabase.";
-    if (!(e instanceof FormError)) console.error(e);
+    if (e instanceof FormError) problem = e.message;
+    else {
+      console.error(e);
+      // Clients get a next step they can take; the Supabase hint is only for Kevin.
+      problem = (await session()).isAdmin
+        ? "That didn't save. Try again; if it keeps failing, check Supabase and the server log."
+        : "That didn't save. Try again in a moment; if it keeps failing, message CodeNova on WhatsApp.";
+    }
   }
   revalidatePath(`/p/${id}`, "layout");
-  if (problem) redirect(`/p/${id}/${page}?error=${encodeURIComponent(problem)}`);
+  if (problem) await redirectWithFlash(`/p/${id}/${page}`, problem);
 }
 
 /** A change only Kevin may make. */
@@ -199,7 +206,8 @@ export async function uploadAsset(projectId: string, form: FormData) {
     const safe = file.name.replace(/[^\w.-]+/g, "_").slice(-100);
     const path = `${id}/assets/${crypto.randomUUID()}-${safe}`;
     ok(await db.storage.from("hub").upload(path, file, { contentType: file.type || "application/octet-stream" }));
-    const { error } = await db.from("assets").insert({ project_id: id, path, name: file.name.slice(0, 200), size_bytes: file.size, note });
+    const thumb = form.get("thumb"); // the browser's preview; dropped if it isn't a small WebP/JPEG
+    const { error } = await db.from("assets").insert({ project_id: id, path, name: file.name.slice(0, 200), size_bytes: file.size, note, thumb: thumbOk(thumb) ? thumb : null });
     if (error) {
       // Clients may add files but not delete them, so the clean-up runs with the secret key.
       await supabaseAdmin().storage.from("hub").remove([path]);

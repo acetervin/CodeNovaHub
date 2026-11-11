@@ -151,13 +151,14 @@ export function SheetButton({ target, icon = "plus", label, dark, compact }: { t
   );
 }
 
-/** A form or detail in a native popover: bottom sheet on phones, centred card on larger screens. */
-export function Sheet({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+/** A form or detail in a native popover: bottom sheet on phones, centred card on larger screens.
+ *  `wide`: room for a picture on desktop. */
+export function Sheet({ id, title, wide, children }: { id: string; title: string; wide?: boolean; children: ReactNode }) {
   return (
-    <div popover="auto" id={id} className="sheet" aria-label={title}>
+    <div popover="auto" id={id} className={wide ? "sheet sheet-wide" : "sheet"} aria-label={title}>
       <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line sm:hidden" />
       <div className="mb-5 flex items-center justify-between gap-4">
-        <h2 className="text-xl font-semibold tracking-[-0.01em]">{title}</h2>
+        <h2 className="min-w-0 break-words text-xl font-semibold tracking-[-0.01em]">{title}</h2>
         <button popoverTarget={id} popoverTargetAction="hide" aria-label="Close" className="btn grid size-10 place-items-center rounded-full bg-paper">
           <Icon name="x" className="size-4" />
         </button>

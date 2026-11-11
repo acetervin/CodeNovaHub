@@ -1,6 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/supabase";
+import { redirectWithFlash } from "@/lib/flash";
 import { FormError, required, text, uuid } from "@/lib/form";
 
 /** New project, for an existing client or a new one. Opens the project when done. */
@@ -27,7 +28,7 @@ export async function createProject(form: FormData) {
   } catch (e) {
     const msg = e instanceof FormError ? e.message : "That didn't save. Try again.";
     if (!(e instanceof FormError)) console.error(e);
-    redirect(`/?error=${encodeURIComponent(msg)}`);
+    return redirectWithFlash("/", msg);
   }
   redirect(`/p/${projectId}`);
 }

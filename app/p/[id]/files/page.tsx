@@ -3,6 +3,8 @@ import { DOC_KINDS, docKindLabel, shortDate } from "@/lib/stages";
 import { Field, Input, Select, Textarea } from "@/components/fields";
 import { FileInput } from "@/components/FileInput";
 import { GENERAL_LIMITS, PDF_LIMITS, TOO_BIG_TIP } from "@/lib/uploads";
+import { FileTile } from "@/components/FileTile";
+import { FileSheet } from "@/components/FileSheet";
 import { Submit } from "@/components/Submit";
 import { Empty, Pill, SectionHead, Sheet, SheetButton, TopBar } from "@/components/ui";
 import { Icon } from "@/components/icons";
@@ -19,11 +21,14 @@ const AGREEMENT_KINDS = DOC_KINDS.filter(([k]) => k !== "invoice");
 export default async function Files({ params }: PageProps<"/p/[id]/files">) {
   const { id } = await params;
   const [{ db, isAdmin }, p] = await Promise.all([session(), getProject(id)]);
-  const [docsQ, assetsQ] = await Promise.all([
+  const [docsQ, assetsQ, thumbsQ] = await Promise.all([
     db.from("documents").select("*").eq("project_id", id).order("signed_on", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }),
-    db.from("assets").select("*").eq("project_id", id).order("created_at", { ascending: false }),
+    db.from("assets").select("id, path, name, size_bytes, note, created_at").eq("project_id", id).order("created_at", { ascending: false }),
+    // Which uploads have a preview; the previews themselves load from /thumb, so this page stays light.
+    db.from("assets").select("id").eq("project_id", id).not("thumb", "is", null),
   ]);
-  const docs = rows(docsQ), assets = rows(assetsQ);
+  const docs = rows(docsQ), withThumb = new Set(rows(thumbsQ).map((t) => t.id as string));
+  const assets = rows(assetsQ).map((a) => ({ ...a, thumb: withThumb.has(a.id) ? `/thumb/${a.id}` : null }));
   const agreements = docs.filter((d) => d.kind !== "invoice");
   const invoices = docs.filter((d) => d.kind === "invoice");
   // The newest signed agreement is the one that counts (standard CodeNova terms).
@@ -42,9 +47,11 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
       {isAdmin && del && remove(del)}
     </li>
   );
-  const open = (path: string, name: string) => (
-    <a href={`/f/${path}`} target="_blank" rel="noopener" className="break-words font-medium underline-offset-2 hover:underline">{name}</a>
+  // Every file opens in a sheet on this page (FileSheet), never a new tab.
+  const open = (id: string, name: string) => (
+    <button popoverTarget={`view-${id}`} className="break-words text-left font-medium underline-offset-2 hover:underline">{name}</button>
   );
+  const pdfName = (title: string) => (/\.pdf$/i.test(title) ? title : `${title}.pdf`);
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,7 +60,7 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
       <div className="flex items-start gap-3 px-1">
         <Icon name="shield" className="mt-0.5 size-5 shrink-0 text-ok" />
         <p className="text-sm text-muted">
-          Only {isAdmin ? `${p.client.name}'s team` : "your team"} and CodeNova can open these files. Each download link works for one minute,
+          Only {isAdmin ? `${p.client.name}'s team` : "your team"} and CodeNova can open these files. Each file link works for one minute (ten for videos, so they can play),
           and every file added or removed is written to the project history.
         </p>
       </div>
@@ -66,7 +73,7 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
           ) : (
             <ul className="flex flex-col gap-3">
               {agreements.map((d) => card(d.id, "bg-nova-soft text-nova", "file", <>
-                {open(d.path, d.title)}
+                {open(d.id, d.title)}
                 <p className="text-sm text-faint">{[docKindLabel[d.kind], d.ref].filter(Boolean).join(", ")}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {d.signed_on ? <Pill tone="ok">Signed {shortDate(d.signed_on)}</Pill> : <Pill>Not signed yet</Pill>}
@@ -84,7 +91,7 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
           ) : (
             <ul className="flex flex-col gap-3">
               {invoices.map((d) => card(d.id, "bg-paper text-ink", "wallet", <>
-                {open(d.path, d.title)}
+                {open(d.id, d.title)}
                 <p className="text-sm text-faint">{[d.ref !== d.title && d.ref, `Added ${shortDate(d.created_at)}`].filter(Boolean).join(", ")}</p>
               </>, act.deleteDocument.bind(null, id, d.id)))}
             </ul>
@@ -97,15 +104,30 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
         {assets.length === 0 ? (
           <Empty icon="upload">{isAdmin ? `Nothing yet. Files you or ${p.client.name} upload show up here.` : `Send your logo, photos and text here. ${GENERAL_LIMITS}`}</Empty>
         ) : (
-          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {assets.map((a) => card(a.id, "bg-paper text-muted", "upload", <>
-              {open(a.path, a.name)}
-              <p className="text-sm text-faint">{size(a.size_bytes)}, {shortDate(a.created_at)}</p>
-              {a.note && <p className="mt-1 text-sm text-muted">{a.note}</p>}
-            </>, act.deleteAsset.bind(null, id, a.id)))}
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+            {assets.map((a) => (
+              <li key={a.id} className="flex min-w-0 flex-col gap-2 rounded-[24px] bg-card p-2">
+                <button popoverTarget={`view-${a.id}`} aria-label={`Open ${a.name}`} className="btn block w-full"><FileTile name={a.name} src={a.thumb} /></button>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5 px-2 pb-1.5">
+                  <p title={a.name} className="truncate font-medium">{a.name}</p>
+                  <p className="text-sm text-faint">{size(a.size_bytes)}, {shortDate(a.created_at)}</p>
+                  {a.note && <p className="line-clamp-2 text-sm text-muted" title={a.note}>{a.note}</p>}
+                  {isAdmin && <div className="mt-auto pt-1">{remove(act.deleteAsset.bind(null, id, a.id))}</div>}
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </section>
+
+      {assets.map((a) => (
+        <FileSheet key={a.id} id={`view-${a.id}`} title={a.name} path={a.path} thumb={a.thumb} size={a.size_bytes}
+          about={<>{size(a.size_bytes)}, {shortDate(a.created_at)}{a.note && <><br />{a.note}</>}</>} />
+      ))}
+      {docs.map((d) => (
+        <FileSheet key={d.id} id={`view-${d.id}`} title={d.title} fileName={pdfName(d.title)} path={d.path}
+          about={[docKindLabel[d.kind], d.ref !== d.title && d.ref, d.signed_on ? `signed ${shortDate(d.signed_on)}` : `added ${shortDate(d.created_at)}`].filter(Boolean).join(", ")} />
+      ))}
 
       <Sheet id="upload" title="Upload a file">
         <form action={act.uploadAsset.bind(null, id)} className="flex flex-col gap-4">

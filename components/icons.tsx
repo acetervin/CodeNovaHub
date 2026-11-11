@@ -1,6 +1,6 @@
 import {
-  CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardList, Code, Ellipsis, FilePen, FileText, Flag, History, House, LayoutDashboard, Link,
-  LogOut, Paperclip, Plus, ReceiptText, Search, Settings, ShieldCheck, TriangleAlert, Upload, User, Wallet, X,
+  CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardList, Code, Download, Ellipsis, FilePen, FileText, Flag, History, House, LayoutDashboard, Link,
+  LogOut, Paperclip, Play, Plus, ReceiptText, Search, Settings, ShieldCheck, TriangleAlert, Upload, User, Wallet, X,
 } from "lucide-react";
 
 // Lucide line icons, named for what they mean here. Names are strings so server pages can hand them to the nav.
@@ -8,7 +8,7 @@ const icons = {
   home: House, tasks: ClipboardList, file: FileText, wallet: Wallet, more: Ellipsis, settings: Settings,
   calendar: CalendarDays, history: History, back: ChevronLeft, next: ChevronRight, plus: Plus, search: Search,
   check: Check, logout: LogOut, upload: Upload, alert: TriangleAlert, code: Code, user: User, shield: ShieldCheck,
-  overview: LayoutDashboard, link: Link, x: X, receipt: ReceiptText, signed: FilePen, clip: Paperclip, flag: Flag,
+  overview: LayoutDashboard, play: Play, download: Download, link: Link, x: X, receipt: ReceiptText, signed: FilePen, clip: Paperclip, flag: Flag,
 };
 
 export type IconName = keyof typeof icons;

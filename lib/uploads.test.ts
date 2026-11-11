@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_BYTES, fileProblem } from "./uploads.ts";
+import { MAX_BYTES, fileKind, fileProblem, thumbOk } from "./uploads.ts";
 
 test("files within the rules pass", () => {
   assert.equal(fileProblem({ name: "Logo.PNG", size: 2000 }, "general"), null);
@@ -20,4 +20,18 @@ test("wrong types are named", () => {
 
 test("empty files are refused", () => {
   assert.match(fileProblem({ name: "logo.png", size: 0 }, "general")!, /is empty/);
+});
+
+test("file kinds by extension, anything unknown is a plain file", () => {
+  assert.deepEqual(fileKind("Report.DOCX"), { ext: "docx", kind: "doc", label: "Document" });
+  assert.equal(fileKind("shoot.mov").kind, "video");
+  assert.equal(fileKind("README").kind, "file");
+});
+
+test("thumbnails: small WebP or JPEG data URLs only", () => {
+  assert.ok(thumbOk("data:image/webp;base64,UklGRg=="));
+  assert.ok(!thumbOk("data:image/svg+xml;base64,PHN2Zz4="));
+  assert.ok(!thumbOk("data:image/jpeg;base64,<script>"));
+  assert.ok(!thumbOk(`data:image/jpeg;base64,${"A".repeat(100_000)}`));
+  assert.ok(!thumbOk(null));
 });

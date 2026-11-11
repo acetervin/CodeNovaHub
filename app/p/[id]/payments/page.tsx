@@ -6,6 +6,7 @@ import { Field, Input } from "@/components/fields";
 import { Submit } from "@/components/Submit";
 import { ActivityTile, Bars, Card, Empty, LogRow, Pill, SectionHead, Sheet, SheetButton, TopBar, ago } from "@/components/ui";
 import { Icon } from "@/components/icons";
+import { FileSheet } from "@/components/FileSheet";
 import * as act from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -136,14 +137,14 @@ export default async function Payments({ params }: PageProps<"/p/[id]/payments">
               <ul>
                 {invoices.map((d) => (
                   <li key={d.id}>
-                    <a href={`/f/${d.path}`} target="_blank" rel="noopener" className="flex items-center gap-3 rounded-2xl p-3 transition-colors duration-150 hover:bg-paper">
+                    <button popoverTarget={`view-${d.id}`} className="flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors duration-150 hover:bg-paper">
                       <ActivityTile kind="invoice" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{d.title}</p>
                         <p className="text-sm text-faint">{[d.ref !== d.title && d.ref, `Added ${shortDate(d.created_at)}`].filter(Boolean).join(", ")}</p>
                       </div>
                       <span className="text-sm text-muted">Open</span>
-                    </a>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -152,6 +153,11 @@ export default async function Payments({ params }: PageProps<"/p/[id]/payments">
         </section>
         </div>
       </div>
+
+      {invoices.map((d) => (
+        <FileSheet key={d.id} id={`view-${d.id}`} title={d.title} fileName={/\.pdf$/i.test(d.title) ? d.title : `${d.title}.pdf`} path={d.path}
+          about={[d.ref !== d.title && d.ref, `added ${shortDate(d.created_at)}`].filter(Boolean).join(", ")} />
+      ))}
 
       {isAdmin && (
         <Sheet id="add-payment" title="New payment">

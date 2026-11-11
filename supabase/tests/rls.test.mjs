@@ -73,7 +73,10 @@ assert.equal((await as(T, `update projects set name = 'hacked' returning id`)).l
 await rejects(T, `insert into payments (project_id, label, amount_kes) values ('${teteziProject}', 'x', 1)`);
 
 // Uploads: own project only, under assets/, recorded as themselves.
-await as(T, `insert into assets (project_id, path, name, size_bytes) values ('${teteziProject}', '${teteziProject}/assets/logo.png', 'logo.png', 100)`);
+await as(T, `insert into assets (project_id, path, name, size_bytes, thumb) values ('${teteziProject}', '${teteziProject}/assets/logo.png', 'logo.png', 100, 'data:image/webp;base64,UklGRg==')`);
+// Thumbnails: only small WebP/JPEG data URLs, never SVG (it can carry script) or anything huge.
+await rejects(T, `insert into assets (project_id, path, name, size_bytes, thumb) values ('${teteziProject}', '${teteziProject}/assets/s.svg', 's.svg', 100, 'data:image/svg+xml;base64,PHN2Zz4=')`);
+await rejects(T, `insert into assets (project_id, path, name, size_bytes, thumb) values ('${teteziProject}', '${teteziProject}/assets/b.jpg', 'b.jpg', 100, 'data:image/jpeg;base64,' || repeat('A', 100000))`);
 await rejects(T, `insert into assets (project_id, path, name, size_bytes) values ('${fpaProject}', '${fpaProject}/assets/x.png', 'x', 100)`);
 await rejects(T, `insert into assets (project_id, path, name, size_bytes) values ('${teteziProject}', '${teteziProject}/documents/fake.pdf', 'x', 100)`);
 await rejects(T, `insert into assets (project_id, path, name, size_bytes, uploaded_by) values ('${teteziProject}', '${teteziProject}/assets/y.png', 'y', 100, '${kevin}')`);
