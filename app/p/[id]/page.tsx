@@ -2,7 +2,8 @@ import Link from "next/link";
 import { getProject, rows, session } from "@/lib/supabase";
 import { nairobiToday } from "@/lib/form";
 import { STAGES, shillings, shortDate, stageLabel } from "@/lib/stages";
-import { completion, money, taskState, weeklyCompletion } from "@/lib/progress";
+import { completion, daysBetween, money, taskState, weeklyCompletion } from "@/lib/progress";
+import { type Contact, nudgeContact, nudgeHref, nudgeMessage } from "@/lib/nudge";
 import { Avatar, Bars, Card, Empty, LogRow, Pill, RoundLink, SectionHead, ago } from "@/components/ui";
 import { Icon, Mark } from "@/components/icons";
 
@@ -11,17 +12,40 @@ export const dynamic = "force-dynamic";
 export default async function Overview({ params }: PageProps<"/p/[id]">) {
   const { id } = await params;
   const [{ db, isAdmin, name, login }, p] = await Promise.all([session(), getProject(id)]);
-  const [tasksQ, paysQ, logQ] = await Promise.all([
+  const [tasksQ, paysQ, logQ, contactsQ] = await Promise.all([
     db.from("milestones").select("id, title, due_on, done_on, waiting_on").eq("project_id", id).order("due_on", { nullsFirst: false }),
-    db.from("payments").select("amount_kes, due_on, paid_on").eq("project_id", id).order("due_on", { nullsFirst: false }),
-    db.from("activity").select("id, at, actor, summary, kind").eq("project_id", id).order("at", { ascending: false }).order("id", { ascending: false }).limit(4),
+    db.from("payments").select("id, label, amount_kes, due_on, paid_on").eq("project_id", id).order("due_on", { nullsFirst: false }),
+    db.from("activity").select("id, at, actor, summary, kind").eq("project_id", id).order("at", { ascending: false }).order("id", { ascending: false }).limit(isAdmin ? 50 : 5),
+    isAdmin ? db.from("contacts").select("name, phone, email").eq("client_id", p.client.id).order("name") : { data: [], error: null },
   ]);
-  const tasks = rows(tasksQ), pays = rows(paysQ), log = rows(logQ);
+  const tasks = rows(tasksQ), pays = rows(paysQ), log = rows(logQ), contacts = rows(contactsQ);
 
   const today = nairobiToday();
   const pct = completion(tasks);
   const late = tasks.filter((t) => taskState(t, today) === "late").length;
   const open = tasks.filter((t) => !t.done_on).slice(0, 3);
+
+  // Kevin's view splits the work by whose turn it is: his next task up top, the client's open items in their own
+  // list with a Nudge button. Tasks are sorted by due date, so late ones come first.
+  const mine = tasks.filter((t) => !t.done_on && t.waiting_on !== "client");
+  const myNext = mine[0];
+  const who = nudgeContact(contacts as Contact[]);
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const nudge = (what: string, due: string | null, isLate: boolean, page: string) => nudgeHref(who, nudgeMessage({
+    first: who?.name.split(" ")[0] ?? "there", what, project: p.name, due: due && shortDate(due), late: isLate, link: `${site}/p/${id}/${page}`,
+  }));
+  const waiting = [
+    ...tasks.filter((t) => !t.done_on && t.waiting_on === "client").map((t) => {
+      const isLate = taskState(t, today) === "late";
+      return { key: `t${t.id}`, icon: "user" as const, title: t.title, due: t.due_on, late: isLate, href: nudge(`"${t.title}"`, t.due_on, isLate, "tasks") };
+    }),
+    // Payments count once they're due within a week, or late.
+    ...pays.filter((x) => !x.paid_on && x.due_on && daysBetween(today, x.due_on) <= 7).map((x) => {
+      const isLate = x.due_on! < today;
+      return { key: `p${x.id}`, icon: "wallet" as const, title: `${x.label}, ${shillings(x.amount_kes)}`, due: x.due_on, late: isLate,
+        href: nudge(`the payment "${x.label}" (${shillings(x.amount_kes)})`, x.due_on, isLate, "payments") };
+    }),
+  ].sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   const m = money(pays, today);
   const value = p.value_kes ?? (m.total || null);
   const stage = STAGES.findIndex(([s]) => s === p.status);
@@ -35,6 +59,25 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
     .reduce<number[]>((acc, x) => [...acc, (acc.at(-1) ?? 0) + x.amount_kes], []);
   const paidPct = value ? Math.round((m.paid / value) * 100) : null;
   const base = `/p/${id}`;
+  const waitingRow = (w: (typeof waiting)[number]) => (
+    <div key={w.key} className="flex items-center gap-3 rounded-[22px] bg-card p-3 pl-4">
+      <span className={`grid size-10 shrink-0 place-items-center rounded-full ${w.late ? "bg-danger-soft text-danger" : "bg-nova-soft text-nova"}`}>
+        <Icon name={w.icon} className="size-[18px]" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">{w.title}</p>
+        <p className={`truncate text-sm ${w.late ? "text-danger" : "text-faint"}`}>
+          {w.due ? `${w.late ? "Was due" : "Due"} ${shortDate(w.due)}` : "No due date"}
+        </p>
+      </div>
+      {w.href && (
+        <a href={w.href} target="_blank" rel="noopener" title={`Remind ${who?.name} on ${who?.phone ? "WhatsApp" : "email"}`}
+          className={`btn shrink-0 rounded-full px-4 py-2 text-sm font-medium ${w.late ? "bg-ink text-white" : "bg-paper"}`}>Nudge</a>
+      )}
+    </div>
+  );
+  // The right column previews the top 3 and the latest 5; the full lists follow below, full width (admin only).
+  const moreWaiting = isAdmin && waiting.length > 3, moreLog = isAdmin && log.length > 5;
 
   return (
     <div className="flex flex-col gap-5">
@@ -51,7 +94,21 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
         )}
       </header>
 
-      {p.next_step && (
+      {isAdmin ? (
+        <Card className="flex items-center gap-4">
+          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-white"><Icon name="code" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-muted">Your next step</p>
+            <p className="mt-0.5 text-lg leading-snug">{myNext ? myNext.title : "Nothing open on your side"}</p>
+            <p className="text-sm text-faint">
+              {myNext ? [myNext.due_on ? `Due ${shortDate(myNext.due_on)}` : "No due date", mine.length > 1 && `then ${mine.length - 1} more of yours`].filter(Boolean).join(", ")
+                : waiting.length ? `Waiting on ${p.client.name}.` : "Plan the next task on the Tasks page."}
+            </p>
+          </div>
+          {myNext && taskState(myNext, today) === "late" && <Pill tone="danger">Late</Pill>}
+          <RoundLink href={`${base}/tasks`} icon="next" label="Open tasks" />
+        </Card>
+      ) : p.next_step && (
         <Card className="flex items-start gap-4">
           <span className="grid size-11 shrink-0 place-items-center rounded-full bg-nova-soft text-nova"><Icon name="next" /></span>
           <div className="min-w-0">
@@ -62,14 +119,15 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
       )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        {/* Desktop: the left cards stretch so both columns end on the same line. */}
         <div className="flex flex-col gap-4">
-          <Card>
+          <Card className="flex flex-1 flex-col">
             <div className="flex items-center justify-between gap-4">
               <h2 className="font-medium">Project snapshot</h2>
               <Link href={`${base}/tasks`} aria-label="All tasks" className="btn grid size-10 place-items-center rounded-full bg-paper"><Icon name="more" /></Link>
             </div>
-            <div className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-end gap-5">
-              <div className="pb-1">
+            <div className="mt-2 grid flex-1 grid-cols-[auto_minmax(0,1fr)] gap-5">
+              <div className="self-end pb-1">
                 <p className="text-[clamp(3.25rem,9vw,4.25rem)] font-semibold leading-none tracking-[-0.04em] tabular-nums">
                   {pct ?? "–"}<span className="text-[0.5em] tracking-normal">%</span>
                 </p>
@@ -79,7 +137,7 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
                     : <Pill dot={late ? "danger" : "ok"}>{late ? `${late} ${late === 1 ? "task" : "tasks"} late` : "On track"}</Pill>}
                 </div>
               </div>
-              <Bars values={weeklyCompletion(tasks, today, 8)} label={`Completion over the last 8 weeks, now ${pct ?? 0}%`} className="h-36" />
+              <Bars values={weeklyCompletion(tasks, today, 8)} label={`Completion over the last 8 weeks, now ${pct ?? 0}%`} className="h-full min-h-36 self-end" />
             </div>
             <div className="mt-6">
               <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -94,8 +152,8 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
             </div>
           </Card>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Link href={`${base}/payments`} className="btn block rounded-card bg-card p-4">
+          <div className="grid flex-1 grid-cols-2 gap-4">
+            <Link href={`${base}/payments`} className="btn flex flex-col rounded-card bg-card p-4">
               <div className="flex items-center gap-2.5">
                 <span className="hidden size-9 shrink-0 place-items-center rounded-full border border-line sm:grid"><Icon name="wallet" className="size-[18px]" /></span>
                 <div className="min-w-0">
@@ -103,20 +161,21 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
                   <p className="truncate font-semibold tabular-nums">{value ? shillings(value) : "Not set"}</p>
                 </div>
               </div>
-              <div className="mt-3 flex h-24 items-end rounded-2xl bg-paper px-3 pt-3">
+              <div className="mt-3 flex min-h-24 flex-1 items-end rounded-2xl bg-paper px-3 pt-3">
                 {payBars.length ? <Bars values={payBars} tones={payTones} label={`${pays.length} payments`} className="h-full w-full" />
                   : <p className="mb-auto text-sm text-faint">No payments set</p>}
               </div>
             </Link>
-            <Link href={`${base}/payments`} className="btn block rounded-card bg-card p-4">
+            <Link href={`${base}/payments`} className="btn flex flex-col rounded-card bg-card p-4">
               <div className="flex items-center gap-2.5">
                 <span className="hidden size-9 shrink-0 place-items-center rounded-full border border-line sm:grid"><Icon name="check" className="size-[18px]" /></span>
                 <div className="min-w-0">
                   <p className="text-xs text-faint">Paid</p>
                   <p className="truncate font-semibold tabular-nums">{paidPct === null ? "–" : `${paidPct}% of total`}</p>
+                  {m.overdue > 0 && <p className="truncate text-xs font-medium text-danger">{shillings(m.overdue)} overdue</p>}
                 </div>
               </div>
-              <div className="relative mt-3 flex h-24 items-end rounded-2xl bg-paper px-3 pt-3">
+              <div className="relative mt-3 flex min-h-24 flex-1 items-end rounded-2xl bg-paper px-3 pt-3">
                 {paidSteps.length ? (
                   <>
                     <Bars values={paidSteps.map((v) => Math.round((v / (value ?? v)) * 100))} label={`${shillings(m.paid)} paid so far`} className="h-full w-full" />
@@ -129,12 +188,23 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
               </div>
             </Link>
           </div>
-          {m.overdue > 0 && (
-            <p className="flex items-center gap-2 px-1 text-sm text-danger"><Icon name="alert" className="size-4" />{shillings(m.overdue)} is past its due date.</p>
-          )}
         </div>
 
         <div className="flex flex-col gap-5">
+          {isAdmin ? (
+            <section className="flex flex-col gap-3">
+              <SectionHead title={`Waiting on ${p.client.name}`} href={moreWaiting ? "#waiting" : undefined} more={`View all ${waiting.length}`} />
+              {waiting.length === 0 ? <Empty icon="user">Nothing is waiting on them right now.</Empty> : waiting.slice(0, 3).map(waitingRow)}
+              {waiting.length > 0 && !who && (
+                <p className="px-1 text-sm text-muted">Add a phone or email for {p.client.name} in <Link href={`${base}/settings`} className="underline underline-offset-2">Settings</Link> to nudge them.</p>
+              )}
+              {p.next_step && (
+                <p className="px-1 text-sm text-muted">
+                  Their next step, as they see it: &ldquo;{p.next_step}&rdquo; <Link href={`${base}/settings`} className="text-ink underline underline-offset-2">Edit</Link>
+                </p>
+              )}
+            </section>
+          ) : (
           <section className="flex flex-col gap-3">
             <SectionHead title="Coming up" href={`${base}/tasks`} />
             {open.length === 0 ? (
@@ -159,17 +229,36 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
               );
             })}
           </section>
+          )}
 
           <section className="flex flex-col gap-3">
-            <SectionHead title="Latest updates" href={`${base}/history`} />
+            <SectionHead title="Latest updates" href={moreLog ? "#updates" : `${base}/history`} />
             <Card className="p-2">
               <ul>
-                {log.map((a) => <LogRow key={a.id} a={a} when={ago(a.at)} />)}
+                {log.slice(0, 5).map((a) => <LogRow key={a.id} a={a} when={ago(a.at)} />)}
               </ul>
             </Card>
           </section>
         </div>
       </div>
+
+      {moreWaiting && (
+        <section id="waiting" className="flex scroll-mt-6 flex-col gap-3">
+          <SectionHead title={`Everything waiting on ${p.client.name}`}><span className="text-sm text-muted">{waiting.length} open</span></SectionHead>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">{waiting.map(waitingRow)}</div>
+        </section>
+      )}
+      {moreLog && (
+        <section id="updates" className="flex scroll-mt-6 flex-col gap-3">
+          <SectionHead title="All updates" href={`${base}/history`} more="Full history" />
+          {/* Columns read top to bottom, so the newest stays first. */}
+          <Card className="p-2">
+            <ul className="gap-x-4 lg:columns-2 [&>li]:break-inside-avoid">
+              {log.map((a) => <LogRow key={a.id} a={a} when={ago(a.at)} />)}
+            </ul>
+          </Card>
+        </section>
+      )}
     </div>
   );
 }
