@@ -11,6 +11,13 @@ type Db = Awaited<ReturnType<typeof adminDb>>;
 
 type Page = "tasks" | "files" | "payments" | "settings";
 
+/** What went wrong when it wasn't something they typed. Clients get a step they can take; the Supabase hint is Kevin's. */
+async function failed() {
+  return (await session()).isAdmin
+    ? "That didn't save. Try again; if it keeps failing, check Supabase and the server log."
+    : "That didn't save. Try again in a moment; if it keeps failing, message CodeNova on WhatsApp.";
+}
+
 /** Runs one change. Success re-renders in place; a problem comes back to the page the form is on (lib/flash.ts). */
 async function run(projectId: unknown, page: Page, db: Db, fn: (db: Db, id: string) => Promise<unknown>) {
   const id = uuid(projectId);
@@ -21,10 +28,7 @@ async function run(projectId: unknown, page: Page, db: Db, fn: (db: Db, id: stri
     if (e instanceof FormError) problem = e.message;
     else {
       console.error(e);
-      // Clients get a next step they can take; the Supabase hint is only for Kevin.
-      problem = (await session()).isAdmin
-        ? "That didn't save. Try again; if it keeps failing, check Supabase and the server log."
-        : "That didn't save. Try again in a moment; if it keeps failing, message CodeNova on WhatsApp.";
+      problem = await failed();
     }
   }
   revalidatePath(`/p/${id}`, "layout");
@@ -192,26 +196,49 @@ export async function deleteContact(projectId: string, contactId: string) {
 }
 
 /** A client (or Kevin) adds a file. Runs as the signed-in person, so storage and table rules decide. */
-export async function uploadAsset(projectId: string, form: FormData) {
-  const db = await supabase();
-  const { data: claims } = await db.auth.getClaims();
-  if (!claims) redirect("/login");
-  await run(projectId, "files", db, async (db, id) => {
-    const file = form.get("file");
-    if (!(file instanceof File)) throw new FormError("Choose a file to upload.");
-    const problem = fileProblem(file, "general");
-    if (problem) throw new FormError(problem);
-    const note = text(form, "note", "Note", 500);
+// Uploads to General files go straight from the browser to storage (lib/upload-queue.ts), so they can show
+// progress and skip the 25 MB trip through this server. These are the two server steps around that.
 
-    const safe = file.name.replace(/[^\w.-]+/g, "_").slice(-100);
+/** Step 1: checks the file and hands back a one-time link (two hours) to send it to this project's assets/. */
+export async function startUpload(projectId: string, file: { name: string; size: number }): Promise<{ path: string; url: string } | { error: string }> {
+  try {
+    const id = uuid(projectId);
+    const db = await supabase();
+    if (!(await db.auth.getClaims()).data) return { error: "You've been logged out. Log in again, then retry." };
+    const name = String(file?.name ?? ""), size = Number(file?.size);
+    const problem = fileProblem({ name, size }, "general");
+    if (problem) return { error: problem };
+    const safe = name.replace(/[^\w.-]+/g, "_").slice(-100);
     const path = `${id}/assets/${crypto.randomUUID()}-${safe}`;
-    ok(await db.storage.from("hub").upload(path, file, { contentType: file.type || "application/octet-stream" }));
-    const thumb = form.get("thumb"); // the browser's preview; dropped if it isn't a small WebP/JPEG
-    const { error } = await db.from("assets").insert({ project_id: id, path, name: file.name.slice(0, 200), size_bytes: file.size, note, thumb: thumbOk(thumb) ? thumb : null });
-    if (error) {
-      // Clients may add files but not delete them, so the clean-up runs with the secret key.
-      await supabaseAdmin().storage.from("hub").remove([path]);
-      throw new Error(error.message);
-    }
-  });
+    // Storage checks the upload rules here: only this project's people, only under assets/.
+    const signed = ok(await db.storage.from("hub").createSignedUploadUrl(path))!;
+    return { path, url: signed.signedUrl };
+  } catch (e) {
+    console.error(e);
+    return { error: await failed() };
+  }
+}
+
+/** Step 2: once the file is in storage, records it, taking the size from storage rather than the browser.
+ *  shortcut: a file that's sent but never recorded stays in storage unseen; sweep assets/ objects without a row
+ *  if that ever adds up. */
+export async function finishUpload(projectId: string, input: { path: string; name: string; note: string; thumb: string | null }): Promise<{ error?: string }> {
+  try {
+    const id = uuid(projectId);
+    const db = await supabase();
+    if (!(await db.auth.getClaims()).data) return { error: "You've been logged out. Log in again, then retry." };
+    const path = String(input?.path ?? ""), name = String(input?.name ?? "").slice(0, 200);
+    if (!path.startsWith(`${id}/assets/`) || path.includes("..")) throw new FormError("That upload isn't for this project.");
+    const stored = ok(await db.storage.from("hub").info(path))!;
+    const problem = fileProblem({ name, size: stored.size ?? 0 }, "general");
+    if (problem) throw new FormError(problem);
+    const note = String(input?.note ?? "").trim().slice(0, 500) || null;
+    ok(await db.from("assets").insert({ project_id: id, path, name, size_bytes: stored.size, note, thumb: thumbOk(input?.thumb) ? input.thumb : null }));
+    revalidatePath(`/p/${id}`, "layout");
+    return {};
+  } catch (e) {
+    if (e instanceof FormError) return { error: e.message };
+    console.error(e);
+    return { error: await failed() };
+  }
 }

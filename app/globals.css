@@ -149,3 +149,21 @@ summary::-webkit-details-marker { display: none; }
   .sheet, .sheet:popover-open, .menu, .menu:popover-open { transform: none; }
   .bar { animation: none; }
 }
+
+/* Toasts (components/Toasts.tsx) sit in a manual popover so open sheets can't cover them. The layer itself
+   lets clicks through; only the toasts take them. --toast-bottom keeps them above the phone tab bar. */
+:root { --toast-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 1024px) { :root { --toast-bottom: 24px; } }
+.toast-layer {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: visible;
+  pointer-events: none;
+}
+.toast-layer [data-sonner-toast] { pointer-events: auto; }

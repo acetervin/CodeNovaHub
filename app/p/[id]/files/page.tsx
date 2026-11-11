@@ -1,10 +1,12 @@
 import { getProject, rows, session } from "@/lib/supabase";
 import { DOC_KINDS, docKindLabel, shortDate } from "@/lib/stages";
-import { Field, Input, Select, Textarea } from "@/components/fields";
+import { Field, Input, Select } from "@/components/fields";
 import { FileInput } from "@/components/FileInput";
-import { GENERAL_LIMITS, PDF_LIMITS, TOO_BIG_TIP } from "@/lib/uploads";
+import { GENERAL_LIMITS, PDF_LIMITS } from "@/lib/uploads";
 import { FileTile } from "@/components/FileTile";
 import { FileSheet } from "@/components/FileSheet";
+import { UploadForm } from "@/components/UploadForm";
+import { UploadQueue } from "@/components/UploadQueue";
 import { Submit } from "@/components/Submit";
 import { Empty, Pill, SectionHead, Sheet, SheetButton, TopBar } from "@/components/ui";
 import { Icon } from "@/components/icons";
@@ -101,10 +103,9 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
 
       <section className="flex flex-col gap-3">
         <SectionHead title="General files"><SheetButton compact target="upload" icon="upload" label="Upload" dark /></SectionHead>
-        {assets.length === 0 ? (
-          <Empty icon="upload">{isAdmin ? `Nothing yet. Files you or ${p.client.name} upload show up here.` : `Send your logo, photos and text here. ${GENERAL_LIMITS}`}</Empty>
-        ) : (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+        {/* Uploads on their way come first; the empty note shows only while the grid has nothing in it. */}
+        <ul className="peer grid grid-cols-2 gap-3 empty:hidden sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+          <UploadQueue projectId={id} />
             {assets.map((a) => (
               <li key={a.id} className="flex min-w-0 flex-col gap-2 rounded-[24px] bg-card p-2">
                 <button popoverTarget={`view-${a.id}`} aria-label={`Open ${a.name}`} className="btn block w-full"><FileTile name={a.name} src={a.thumb} /></button>
@@ -116,8 +117,10 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
                 </div>
               </li>
             ))}
-          </ul>
-        )}
+        </ul>
+        <div className="hidden peer-empty:block">
+          <Empty icon="upload">{isAdmin ? `Nothing yet. Files you or ${p.client.name} upload show up here.` : `Send your logo, photos and text here. ${GENERAL_LIMITS}`}</Empty>
+        </div>
       </section>
 
       {assets.map((a) => (
@@ -130,13 +133,7 @@ export default async function Files({ params }: PageProps<"/p/[id]/files">) {
       ))}
 
       <Sheet id="upload" title="Upload a file">
-        <form action={act.uploadAsset.bind(null, id)} className="flex flex-col gap-4">
-          <Field label="File" hint={`${GENERAL_LIMITS} ${TOO_BIG_TIP}`}>
-            <FileInput kind="general" className={fileInput} />
-          </Field>
-          <Field label="Note (optional)"><Textarea name="note" maxLength={500} placeholder="This is the logo with the white background." /></Field>
-          <Submit pending="Uploading…">Upload</Submit>
-        </form>
+        <UploadForm projectId={id} inputClassName={fileInput} />
       </Sheet>
 
       {isAdmin && (
