@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, Key, ReactNode } from "react";
 import { Icon, type IconName } from "./icons";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -55,6 +55,30 @@ export function ActivityTile({ kind }: { kind: string }) {
 }
 
 /** One history entry: kind tile, who, when, what. `when` is the time as shown (e.g. "5 min ago" or "14:02"). */
+const logDay = (at: string) => new Date(at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" });
+const logTime = (at: string) => new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Nairobi" });
+
+/** A log grouped by Nairobi day. Rows flow through columns top to bottom, so the newest stays first and a busy
+ *  day spreads out instead of making one long column. */
+export function DayLog({ log, heading: H = "h3" }: {
+  log: { id: Key; kind: string; actor: string; at: string; summary: string }[]; heading?: "h2" | "h3";
+}) {
+  const today = logDay(new Date().toISOString()), yesterday = logDay(new Date(Date.now() - 864e5).toISOString()); // Nairobi has no DST
+  return (
+    <Card className="gap-x-6 p-2 md:columns-2 2xl:columns-3 [&_li]:break-inside-avoid">
+      {[...Map.groupBy(log, (a) => logDay(a.at))].map(([d, rows]) => (
+        <section key={d} className="[&+section]:mt-2">
+          <H className="flex break-after-avoid items-baseline justify-between gap-3 px-3 pb-1 pt-2">
+            <span className="font-semibold">{d === today ? "Today" : d === yesterday ? "Yesterday" : d}</span>
+            <span className="text-xs font-normal text-faint">{rows.length} {rows.length === 1 ? "change" : "changes"}</span>
+          </H>
+          <ul>{rows.map((a) => <LogRow key={a.id} a={a} when={logTime(a.at)} />)}</ul>
+        </section>
+      ))}
+    </Card>
+  );
+}
+
 export function LogRow({ a, when }: { a: { kind: string; actor: string; at: string; summary: string }; when: string }) {
   return (
     <li className="flex items-start gap-3 rounded-2xl p-3">

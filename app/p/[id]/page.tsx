@@ -4,7 +4,7 @@ import { nairobiToday } from "@/lib/form";
 import { STAGES, shillings, shortDate, stageLabel } from "@/lib/stages";
 import { completion, daysBetween, money, taskState, weeklyCompletion } from "@/lib/progress";
 import { type Contact, nudgeContact, nudgeHref, nudgeMessage } from "@/lib/nudge";
-import { Avatar, Bars, Card, Empty, LogRow, Pill, RoundLink, SectionHead, ago } from "@/components/ui";
+import { Avatar, Bars, Card, DayLog, Empty, LogRow, Pill, RoundLink, SectionHead, ago } from "@/components/ui";
 import { Icon, Mark } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
   const [tasksQ, paysQ, logQ, contactsQ] = await Promise.all([
     db.from("milestones").select("id, title, due_on, done_on, waiting_on").eq("project_id", id).order("due_on", { nullsFirst: false }),
     db.from("payments").select("id, label, amount_kes, due_on, paid_on").eq("project_id", id).order("due_on", { nullsFirst: false }),
-    db.from("activity").select("id, at, actor, summary, kind").eq("project_id", id).order("at", { ascending: false }).order("id", { ascending: false }).limit(isAdmin ? 50 : 5),
+    db.from("activity").select("id, at, actor, summary, kind").eq("project_id", id).order("at", { ascending: false }).order("id", { ascending: false }).limit(300), // shortcut: All updates shows the latest 300; page it once a project outgrows that
     isAdmin ? db.from("contacts").select("name, phone, email").eq("client_id", p.client.id).order("name") : { data: [], error: null },
   ]);
   const tasks = rows(tasksQ), pays = rows(paysQ), log = rows(logQ), contacts = rows(contactsQ);
@@ -76,8 +76,8 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
       )}
     </div>
   );
-  // The right column previews the top 3 and the latest 5; the full lists follow below, full width (admin only).
-  const moreWaiting = isAdmin && waiting.length > 3, moreLog = isAdmin && log.length > 5;
+  // The right column previews the top 3 waiting and the latest 5 updates; the full lists follow below, full width.
+  const moreLog = log.length > 5;
 
   return (
     <div className="flex flex-col gap-5">
@@ -193,7 +193,7 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
         <div className="flex flex-col gap-5">
           {isAdmin ? (
             <section className="flex flex-col gap-3">
-              <SectionHead title={`Waiting on ${p.client.name}`} href={moreWaiting ? "#waiting" : undefined} more={`View all ${waiting.length}`} />
+              <SectionHead title={`Waiting on ${p.client.name}`} href={waiting.length > 3 ? "#waiting" : undefined} more={`View all ${waiting.length}`} />
               {waiting.length === 0 ? <Empty icon="user">Nothing is waiting on them right now.</Empty> : waiting.slice(0, 3).map(waitingRow)}
               {waiting.length > 0 && !who && (
                 <p className="px-1 text-sm text-muted">Add a phone or email for {p.client.name} in <Link href={`${base}/settings`} className="underline underline-offset-2">Settings</Link> to nudge them.</p>
@@ -231,8 +231,9 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
           </section>
           )}
 
-          <section className="flex flex-col gap-3">
-            <SectionHead title="Latest updates" href={moreLog ? "#updates" : `${base}/history`} />
+          {/* With 5 or fewer, this is the whole list, so links to #updates land here. */}
+          <section id={moreLog ? undefined : "updates"} className="flex scroll-mt-6 flex-col gap-3">
+            <SectionHead title="Latest updates" href={moreLog ? "#updates" : undefined} more={`View all ${log.length}`} />
             <Card className="p-2">
               <ul>
                 {log.slice(0, 5).map((a) => <LogRow key={a.id} a={a} when={ago(a.at)} />)}
@@ -242,7 +243,7 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
         </div>
       </div>
 
-      {moreWaiting && (
+      {isAdmin && waiting.length > 0 && (
         <section id="waiting" className="flex scroll-mt-6 flex-col gap-3">
           <SectionHead title={`Everything waiting on ${p.client.name}`}><span className="text-sm text-muted">{waiting.length} open</span></SectionHead>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">{waiting.map(waitingRow)}</div>
@@ -250,13 +251,12 @@ export default async function Overview({ params }: PageProps<"/p/[id]">) {
       )}
       {moreLog && (
         <section id="updates" className="flex scroll-mt-6 flex-col gap-3">
-          <SectionHead title="All updates" href={`${base}/history`} more="Full history" />
-          {/* Columns read top to bottom, so the newest stays first. */}
-          <Card className="p-2">
-            <ul className="gap-x-4 lg:columns-2 [&>li]:break-inside-avoid">
-              {log.map((a) => <LogRow key={a.id} a={a} when={ago(a.at)} />)}
-            </ul>
-          </Card>
+          <SectionHead title="All updates"><span className="text-sm text-muted">{log.length} changes</span></SectionHead>
+          <p className="flex items-start gap-2 px-1 text-sm text-muted">
+            <Icon name="shield" className="mt-0.5 size-4 shrink-0 text-ok" />
+            <span>The hub writes these by itself whenever a task, payment, stage or file changes. Nobody can edit or delete them.</span>
+          </p>
+          <DayLog log={log} />
         </section>
       )}
     </div>

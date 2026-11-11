@@ -46,7 +46,7 @@ Like the other demos: Workers Builds deploys on push to `main`. Set `NEXT_PUBLIC
 | `/p/[id]/tasks` | Timeline, add, finish, reopen, remove | Timeline, read only |
 | `/p/[id]/files` | Agreements and invoices (upload, delete), client files | Agreements, and their own uploads (25 MB, no programs) |
 | `/p/[id]/payments` | Schedule, mark paid with M-Pesa ref, add, delete | Schedule and what's paid |
-| `/p/[id]/history` | Full history | Full history |
+| `/p/[id]/payments/history` | Payment history | Payment history |
 | `/p/[id]/settings` | Stage, details, private note, client logins | – |
 
 Forms open in native popovers (a bottom sheet on phones), so they work before JavaScript loads.

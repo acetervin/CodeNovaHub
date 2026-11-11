@@ -44,10 +44,10 @@ export default async function Due() {
   ] as const;
 
   return (
-    <Shell fit items={[{ href: "/", label: "Projects", icon: "home", exact: true }, { href: "/due", label: "Schedule", icon: "calendar" }]} who={login}>
-      <h1 className="shrink-0 text-2xl font-semibold tracking-[-0.02em] lg:text-[2rem]">Schedule</h1>
-      <div className="mt-5 grid grid-cols-1 gap-5 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_340px] xl:grid-rows-[minmax(0,1fr)]">
-        <section className="flex flex-col gap-5 self-start rounded-card bg-card p-3 [scrollbar-width:none] sm:p-5 xl:max-h-full xl:overflow-y-auto xl:overscroll-contain">
+    <Shell items={[{ href: "/", label: "Projects", icon: "home", exact: true }, { href: "/due", label: "Schedule", icon: "calendar" }]} who={login}>
+      <h1 className="text-2xl font-semibold tracking-[-0.02em] lg:text-[2rem]">Schedule</h1>
+      <Updates className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="flex flex-col gap-5 self-start rounded-card bg-card p-3 sm:p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
             <h2 className="text-xl font-semibold">Open tasks and payments</h2>
             <p className="text-sm text-muted"><span className="font-medium text-ink">{shillings(owed)}</span> still to be paid</p>
@@ -79,8 +79,7 @@ export default async function Due() {
           </section>
           ))}
         </section>
-        <Updates fill />
-      </div>
+      </Updates>
     </Shell>
   );
 }

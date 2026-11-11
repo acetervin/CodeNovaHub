@@ -61,10 +61,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         {cards.length === 0 ? (
           <p className="mt-6 max-w-md text-muted">No projects are linked to {login} yet. If that&rsquo;s wrong, message CodeNova on WhatsApp and we&rsquo;ll fix it.</p>
         ) : (
-          <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 2xl:grid-cols-4 min-[1800px]:grid-cols-5">{cards.map((p) => <ProjectCard key={p.id} p={p} today={today} showClient={false} />)}</div>
-            <Updates />
-          </div>
+          <Updates className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="grid grid-cols-2 gap-2.5 self-start sm:grid-cols-3 sm:gap-3 2xl:grid-cols-4 min-[1800px]:grid-cols-5">{cards.map((p) => <ProjectCard key={p.id} p={p} today={today} showClient={false} />)}</div>
+          </Updates>
         )}
       </Shell>
     );
@@ -95,7 +94,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <Avatar name="Kevin" className="size-12 text-base" />
       </header>
 
-      <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <Updates className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section className="self-start rounded-card bg-card p-3 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="px-1 text-xl font-semibold">Projects</h2>
@@ -124,8 +123,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             </div>
           )}
         </section>
-        <Updates />
-      </div>
+      </Updates>
 
       <Sheet id="new-project" title="New project">
         <form action={createProject} className="flex flex-col gap-4">

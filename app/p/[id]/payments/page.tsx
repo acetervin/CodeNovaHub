@@ -74,7 +74,7 @@ export default async function Payments({ params }: PageProps<"/p/[id]/payments">
         </Card>
 
         <section className="order-4 flex flex-col gap-3">
-          <SectionHead title="Payment history" href={`/p/${id}/history`} />
+          <SectionHead title="Payment history" href={`/p/${id}/payments/history`} />
           {log.length === 0 ? <Empty icon="history">Every payment added, received or changed is recorded here, with who did it.</Empty> : (
             <Card className="p-2"><ul>{log.map((a) => <LogRow key={a.id} a={a} when={ago(a.at)} />)}</ul></Card>
           )}
